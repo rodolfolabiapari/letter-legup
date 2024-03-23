@@ -1,0 +1,249 @@
+\documentclass[11pt]{letter}
+
+%\usepackage[brazil]{babel}
+%\selectlanguage{brazil}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{todonotes}
+\usepackage{verbatim}
+\usepackage{url}
+
+\usepackage{blindtext}
+\address{Computer Department - \\Federal University of Ouro Preto (UFOP)}
+\signature{Rodolfo Labiapari Mansur Guimarães - \url{rodolfolabiapari@decom.ufop.br}\\
+Dr. Ricardo Augusto Rabelo Oliveira - \url{rrabelo@gmail.com}}
+\date{\today.} 
+
+\begin{document}
+\begin{letter}{To the Developers Team of LegUp High-Level Synthesis.}
+\opening{}
+
+This letter has the target to show some issues that the LegUp has been taking with tests realized with my team of embedded's researches.
+
+We are using this tool to compile some mathematicals functions and we realized that we cannot compile any code with \texttt{sin()}, \texttt{cos()} and \texttt{tan()} math functions. 
+So, we decided to create this document to try explain what is happening and try to help you as possible.
+
+To show it, we used the same example that LegUp provide for math library use. 
+The example is called \textit{libm} and it is in \texttt{$\sim$/legup-4.0/examples/libm} path:
+
+{ \footnotesize
+\begin{verbatim}
+#include <math.h>
+#include <stdio.h>
+
+// http://xkcd.com/217/
+
+#define GOLDEN 19999099
+
+int main()
+{
+   double pi = 4 * atan(1);
+   double test = exp(pi) - pi;
+   double sin_test = sin(4.0);               // Line added to test
+   
+   int result = (int)(test * 1000000);
+
+   printf("Result: %d\n", result);
+   if (result == GOLDEN) {
+      printf("PASS\n");
+   } else {
+      printf("FAIL\n");
+      printf("Expected: %d\n", GOLDEN);
+   }
+
+   return result;
+}
+\end{verbatim}
+}
+
+So, we modified the code, adding the \texttt{double sin\_test = sin(4.0);} to show how the problem appears.
+
+The LegUp was modified and recompiled (with help of Ph.D. Andrew Canis) to compile the new codes in debug mode.
+
+After added the line on code, we did the \texttt{make} compilation, we got the error below:
+
+{ \tiny
+\begin{verbatim}
+legup@legup-vm:~/legup-4.0/examples/libm$ make
+# annotate loop labels
+../mark_labels.pl libm.c > libm_labeled.c
+perl: warning: Setting locale failed.
+perl: warning: Please check that your locale settings:
+LANGUAGE = "en_CA:en",
+LC_ALL = (unset),
+LC_PAPER = "pt_BR.UTF-8",
+LC_ADDRESS = "pt_BR.UTF-8",
+LC_MONETARY = "pt_BR.UTF-8",
+LC_NUMERIC = "pt_BR.UTF-8",
+LC_TELEPHONE = "pt_BR.UTF-8",
+LC_IDENTIFICATION = "pt_BR.UTF-8",
+LC_MEASUREMENT = "pt_BR.UTF-8",
+LC_CTYPE = "UTF-8",
+LC_NAME = "pt_BR.UTF-8",
+LANG = "en_CA.UTF-8"
+are supported and installed on your system.
+perl: warning: Falling back to the standard locale ("C").
+# produces pre-link time optimization binary bitcode: libm.prelto.bc
+clang-3.5 libm_labeled.c -emit-llvm -c -fno-builtin -I ../lib/include/ -m32 -I /usr/include/i386-linux-gnu -O0 
+   -mllvm -inline-threshold=-100 -fno-inline -fno-vectorize -fno-slp-vectorize -o libm.prelto.1.bc
+../../llvm/Debug+Asserts/bin/llvm-dis libm.prelto.1.bc
+cp -f libm.prelto.1.bc libm.prelto.cv.bc
+../../llvm/Debug+Asserts/bin/opt -mem2reg -loops -loop-simplify < libm.prelto.cv.bc > libm.prelto.2.bc
+cp libm.prelto.2.bc libm.prelto.linked.bc
+# link-time optimizations may produce llvm mem-family intrinsics
+../../llvm/Debug+Asserts/bin/opt -load=../../llvm/Debug+Asserts/lib/LLVMLegUp.so -legup-config=../legup.tcl 
+    -disable-inlining -disable-opt -std-link-opts < libm.prelto.linked.bc -o libm.prelto.linked.1.bc
+# performs intrinsic lowering so that the linker may be optimized
+../../llvm/Debug+Asserts/bin/opt -load=../../llvm/Debug+Asserts/lib/LLVMLegUp.so -legup-config=../legup.tcl 
+    -disable-inlining -disable-opt -legup-prelto < libm.prelto.linked.1.bc > libm.prelto.6.bc
+# perform link-time optimizations
+../../llvm/Debug+Asserts/bin/opt -load=../../llvm/Debug+Asserts/lib/LLVMLegUp.so -legup-config=../legup.tcl 
+    -disable-inlining -disable-opt -std-link-opts < libm.prelto.6.bc -o libm.prelto.bc
+# produces libm.bc binary bitcode
+../../llvm/Debug+Asserts/bin/llvm-link  libm.prelto.bc ../lib/llvm/liblegup.bc ../lib/llvm/libm.bc -o libm.postlto.6.bc
+# remove all unused functions from linking with liblegup and libm
+../../llvm/Debug+Asserts/bin/opt -internalize-public-api-list=main -internalize -globaldce libm.postlto.6.bc -o libm.postlto.8.bc
+# perform link-time optimizations
+../../llvm/Debug+Asserts/bin/opt -load=../../llvm/Debug+Asserts/lib/LLVMLegUp.so -legup-config=../legup.tcl 
+    -disable-inlining -disable-opt -instcombine -std-link-opts < libm.postlto.8.bc -o libm.postlto.bc
+# iterative modulo scheduling
+../../llvm/Debug+Asserts/bin/opt -load=../../llvm/Debug+Asserts/lib/LLVMLegUp.so -legup-config=../legup.tcl 
+    -disable-inlining -disable-opt -basicaa -loop-simplify -indvars2  -loop-pipeline libm.postlto.bc -o libm.1.bc
+../../llvm/Debug+Asserts/bin/opt -load=../../llvm/Debug+Asserts/lib/LLVMLegUp.so -legup-config=../legup.tcl 
+    -disable-inlining -disable-opt -instcombine libm.1.bc -o libm.bc
+# produces textual bitcodes: libm.prelto.1.ll libm.prelto.ll libm.ll
+../../llvm/Debug+Asserts/bin/llvm-dis libm.prelto.linked.bc
+../../llvm/Debug+Asserts/bin/llvm-dis libm.prelto.6.bc
+../../llvm/Debug+Asserts/bin/llvm-dis libm.prelto.bc
+../../llvm/Debug+Asserts/bin/llvm-dis libm.postlto.bc
+../../llvm/Debug+Asserts/bin/llvm-dis libm.postlto.6.bc
+../../llvm/Debug+Asserts/bin/llvm-dis libm.postlto.8.bc
+../../llvm/Debug+Asserts/bin/llvm-dis libm.1.bc
+../../llvm/Debug+Asserts/bin/llvm-dis libm.bc
+# produces verilog: libm.v
+../../llvm/Debug+Asserts/bin/llc -legup-config=../legup.tcl  -march=v libm.bc -o libm.v
+llc: utils.cpp:453: unsigned int legup::getBitWidth(const llvm::Type*): Assertion `size > 0' failed.
+0  llc             0x0000000002014ec1 llvm::sys::PrintStackTrace(_IO_FILE*) + 38
+1  llc             0x000000000201513e
+2  llc             0x0000000002014ae3
+3  libpthread.so.0 0x00002ac179af9340
+4  libc.so.6       0x00002ac17ac99cc9 gsignal + 57
+5  libc.so.6       0x00002ac17ac9d0d8 abort + 328
+6  libc.so.6       0x00002ac17ac92b86
+7  libc.so.6       0x00002ac17ac92c32
+8  llc             0x0000000000d5d6e3 legup::getBitWidth(llvm::Type const*) + 64
+9  llc             0x0000000000d5da71 legup::getMSBIndex(llvm::Type const*) + 77
+10 llc             0x0000000000e90102 legup::RTLWidth::RTLWidth(llvm::Value const*, legup::MinimizeBitwidth*) + 268
+11 llc             0x0000000000df552d legup::GenerateRTL::createRTLSignalsForInstructions() + 263
+12 llc             0x0000000000df53b5 legup::GenerateRTL::createRTLSignals() + 25
+13 llc             0x0000000000df7c6d legup::GenerateRTL::generateRTL(legup::MinimizeBitwidth*) + 763
+14 llc             0x0000000000e291cb legup::LegupPass::runOnModule(llvm::Module&) + 2719
+15 llc             0x0000000001f0e0fc
+16 llc             0x0000000001f0e7a0 llvm::legacy::PassManagerImpl::run(llvm::Module&) + 244
+17 llc             0x0000000001f0e9bf llvm::legacy::PassManager::run(llvm::Module&) + 39
+18 llc             0x0000000000ce6d2c
+19 llc             0x0000000000ce5ebf main + 237
+20 libc.so.6       0x00002ac17ac84ec5 __libc_start_main + 245
+21 llc             0x0000000000ce37f4
+Stack dump:
+0.	Program arguments: ../../llvm/Debug+Asserts/bin/llc -legup-config=../legup.tcl -march=v libm.bc -o libm.v
+1.	Running pass 'LegupPass backend' on module 'libm.bc'.
+make: *** [all] Aborted (core dumped)
+\end{verbatim}
+}
+
+Canis, advised us to verify in debug mode, so after we change the \texttt{DEBUG\_MODE=--desable-optimized} and \texttt{LLVM\_BUILD=Debug+Asserts} we ran the \texttt{make gdb} and \texttt{run} to see where is the problem. 
+
+The error name got was:
+
+{ \tiny
+\begin{verbatim}
+dl-debug.c:74: No such file or directory.
+dl-debug.c:74: No such file or directory.
+dl-debug.c:74: No such file or directory.
+
+                                           Program received signal SIGABRT, Aborted.
+0x00002aaaac5bdcc9 in __GI_raise (sig=sig@entry=6) at ../nptl/sysdeps/unix/sysv/linux/raise.c:56
+(gdb)
+\end{verbatim}
+}
+
+And the stack of calls was:
+
+{ \tiny
+\begin{verbatim}
+(gdb) up
+#1  0x00002aaaac5c10d8 in __GI_abort () at abort.c:89
+(gdb) up
+#2  0x00002aaaac5b6b86 in __assert_fail_base (fmt=0x2aaaac707830 "%s%s%s:%u: %s%sAssertion `%s' failed.\n%n",
+     assertion=assertion@entry=0x20bb654 "size > 0", file=file@entry=0x20bb289 "utils.cpp",
+line=line@entry=453, function=function@entry=0x20bd7e0 <legup::getBitWidth(llvm::Type const*)::__PRETTY_FUNCTION__>
+     "unsigned int legup::getBitWidth(const llvm::Type*)") at assert.c:92
+(gdb) up
+#3  0x00002aaaac5b6c32 in __GI___assert_fail (assertion=0x20bb654 "size > 0", file=0x20bb289 "utils.cpp", line=453,
+function=0x20bd7e0 <legup::getBitWidth(llvm::Type const*)::__PRETTY_FUNCTION__> "unsigned int legup::getBitWidth(const 
+    llvm::Type*)") at assert.c:101
+(gdb) up
+#4  0x0000000000d5d6e3 in legup::getBitWidth (T=0x33d8530) at utils.cpp:453
+(gdb) up
+#5  0x0000000000d5da71 in legup::getMSBIndex (T=0x33d8530) at utils.cpp:493
+(gdb) up
+#6  0x0000000000e90102 in legup::RTLWidth::RTLWidth (this=0x7fffffffd8e0, I=0x3442938, MBW=0x34827c0) at RTL.cpp:66
+(gdb) up
+#7  0x0000000000df552d in legup::GenerateRTL::createRTLSignalsForInstructions (this=0x34c78a0) at GenerateRTL.cpp:5955
+(gdb) up
+#8  0x0000000000df53b5 in legup::GenerateRTL::createRTLSignals (this=0x34c78a0) at GenerateRTL.cpp:5932
+(gdb) up
+#9  0x0000000000df7c6d in legup::GenerateRTL::generateRTL (this=0x34c78a0, _MBW=0x34827c0) at GenerateRTL.cpp:6296
+(gdb) up
+#10 0x0000000000e291cb in legup::LegupPass::runOnModule (this=0x347eab0, M=...) at LegupPass.cpp:322
+(gdb) up
+#11 0x0000000001f0e0fc in (anonymous namespace)::MPPassManager::runOnModule (this=0x33d76b0, M=...) at LegacyPassManager.cpp:1623
+(gdb) up
+#12 0x0000000001f0e7a0 in llvm::legacy::PassManagerImpl::run (this=0x33e92c0, M=...) at LegacyPassManager.cpp:1730
+(gdb) up
+#13 0x0000000001f0e9bf in llvm::legacy::PassManager::run (this=0x7fffffffde20, M=...) at LegacyPassManager.cpp:1767
+(gdb) up
+#14 0x0000000000ce6d2c in compileModule (argv=0x7fffffffe128, Context=...) at llc.cpp:379
+(gdb) up
+#15 0x0000000000ce5ebf in main (argc=6, argv=0x7fffffffe128) at llc.cpp:219
+(gdb) up
+Initial frame selected; you cannot go up.
+(gdb)
+\end{verbatim}
+}
+
+Canis also said to find, with \texttt{list} command, where is the error on code. The error was in line 453 of file \textit{utils.cpp} as below:
+
+{ \tiny
+\begin{verbatim}
+utils.cpp:
+
+ 451 unsigned getBitWidth(const Type* T) {
+ 452    unsigned size = T->getPrimitiveSizeInBits();
+>453    assert(size > 0);
+ 454    return size;
+ 455 }
+\end{verbatim}
+}
+
+We also ran \texttt{print T->dump()} as asked by Canis.
+
+{ \footnotesize
+\begin{verbatim}
+(gdb) up
+#4  0x0000000000d5d6e3 in legup::getBitWidth (T=0x33d8530) at utils.cpp:453
+(gdb) print T->dump(){ i32, i1 }
+$1 = void
+(gdb)
+\end{verbatim}
+}
+
+As said before, this error happened with also with \texttt{tan()} and \texttt{cos()} functions.
+
+We really tried to verify where is the problem and resolve it, but the LegUp project keeps big enough to we find it and set it up.
+If we can help you some way, please tell us by e-mail on bottom of letter.
+
+\closing{So, thank all of you guys for the attention and sorry for the annoying.}
+\end{letter}
+\end{document}
